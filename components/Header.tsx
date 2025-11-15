@@ -15,6 +15,12 @@ export default function Header() {
   const [isHerHovered, setIsHerHovered] = useState(false);
   const [isHimHovered, setIsHimHovered] = useState(false);
   const [isCollectionsHovered, setIsCollectionsHovered] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+
+  // Fix hydration error by only rendering cart count after mount
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   // Check if we're on the homepage
   const isHomePage = pathname === '/';
@@ -209,7 +215,7 @@ export default function Header() {
               aria-label="Cart"
             >
               <ShoppingBag size={20} />
-              {getItemCount() > 0 && (
+              {isMounted && getItemCount() > 0 && (
                 <span className="absolute -top-2 -right-2 bg-yellow-500 text-black text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
                   {getItemCount()}
                 </span>
