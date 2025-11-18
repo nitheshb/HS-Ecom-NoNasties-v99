@@ -4,9 +4,19 @@ import { X, ShoppingBag, Plus, Minus } from 'lucide-react';
 import Image from 'next/image';
 import { useCart } from '@/lib/cart-context';
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
 
 export default function CartSidebar() {
   const { items, isCartOpen, setIsCartOpen, updateQuantity, removeItem, getTotal } = useCart();
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  if (!isMounted) {
+    return null;
+  }
 
   const handleQuantityChange = (id: string, currentQuantity: number, change: number) => {
     const newQuantity = currentQuantity + change;

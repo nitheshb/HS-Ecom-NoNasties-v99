@@ -11,11 +11,21 @@ import { db } from '../../app/db';
 // INTERFACES
 // ============================================
 
+export type BannerImage =
+  | string
+  | {
+      url?: string;
+      link?: string;
+      downloadURL?: string;
+      src?: string;
+      imageUrl?: string;
+    };
+
 export interface Banner {
   id: string;
   title: string;
   img: string;
-  images?: string[];
+  images?: BannerImage[] | Record<string, BannerImage>;
   redirect_url?: string;
   start_date: number; // milliseconds
   end_date: number; // milliseconds
@@ -39,6 +49,7 @@ export const getBanners = async (): Promise<Banner[]> => {
     
     return querySnapshot.docs.map(doc => {
       const data = doc.data();
+      
       return {
         id: doc.id,
         title: data.title,

@@ -1,13 +1,91 @@
 'use client';
 
 import Image from 'next/image';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { getBanners, Banner } from '@/services/read/banner';
+
+const FOR_HIM_TITLES = ['Home-forHim1', 'Home-forHim2', 'Home-forHim3', 'Home-forHim4'] as const;
+
+const extractImageUrl = (banner?: Banner): string => {
+  if (!banner) return '';
+
+  const normalizeString = (value?: unknown) =>
+    typeof value === 'string' ? value.trim() : '';
+
+  // First, try the img field (most direct)
+  const directImg = normalizeString(banner.img);
+  if (directImg) {
+    return directImg;
+  }
+
+  // Then try images array/object
+  if (banner.images) {
+    // Handle both array and object with numeric keys
+    const imagesArray = Array.isArray(banner.images) 
+      ? banner.images 
+      : Object.values(banner.images);
+
+    for (const entry of imagesArray) {
+      if (typeof entry === 'string') {
+        const normalized = normalizeString(entry);
+        if (normalized) {
+          return normalized;
+        }
+      } else if (entry && typeof entry === 'object') {
+        const candidate =
+          normalizeString(entry.url) ||
+          normalizeString(entry.link) ||
+          normalizeString(entry.downloadURL) ||
+          normalizeString(entry.src) ||
+          normalizeString(entry.imageUrl);
+
+        if (candidate) {
+          return candidate;
+        }
+      }
+    }
+  }
+
+  return '';
+};
 
 export default function ForHim() {
   const [isHovered1, setIsHovered1] = useState(false);
   const [isHovered2, setIsHovered2] = useState(false);
   const [isHovered3, setIsHovered3] = useState(false);
   const [isHovered4, setIsHovered4] = useState(false);
+  const [forHimBannerMap, setForHimBannerMap] = useState<Record<string, Banner>>({});
+
+  useEffect(() => {
+    const fetchBanners = async () => {
+      try {
+        const allBanners = await getBanners();
+        const filtered = allBanners.filter((banner) =>
+          FOR_HIM_TITLES.includes(banner.title as typeof FOR_HIM_TITLES[number])
+        );
+
+        const bannerMap = filtered.reduce<Record<string, Banner>>((acc, banner) => {
+          acc[banner.title] = banner;
+          return acc;
+        }, {});
+
+        setForHimBannerMap(bannerMap);
+      } catch (error) {
+        console.error('Failed to load for him banners:', error);
+      }
+    };
+
+    void fetchBanners();
+  }, []);
+
+  const forHimImages = useMemo(() => {
+    return FOR_HIM_TITLES.map((title) => extractImageUrl(forHimBannerMap[title]));
+  }, [forHimBannerMap]);
+
+  const hasAllImages = forHimImages.every((img) => !!img);
+  if (!hasAllImages) {
+    return null;
+  }
 
   return (
     <section className="py-16 bg-white">
@@ -25,8 +103,8 @@ export default function ForHim() {
           {/* Image 1 - Organic Tees */}
           <div className="relative w-full aspect-3/4">
             <Image
-              src="/images/forHim/ForHim1.jpg"
-              alt="Organic Tees"
+              src={forHimImages[0]}
+              alt={forHimBannerMap['Home-forHim1']?.title || "Home-forHim1"}
               fill
               className="object-cover"
               sizes="25vw"
@@ -47,8 +125,8 @@ export default function ForHim() {
           {/* Image 2 - Casual Shirts */}
           <div className="relative w-full aspect-3/4">
             <Image
-              src="/images/forHim/ForHim2.webp"
-              alt="Casual Shirts"
+              src={forHimImages[1]}
+              alt={forHimBannerMap['Home-forHim2']?.title || "Home-forHim2"}
               fill
               className="object-cover"
               sizes="25vw"
@@ -69,8 +147,8 @@ export default function ForHim() {
           {/* Image 3 - Linen Pants */}
           <div className="relative w-full aspect-3/4">
             <Image
-              src="/images/forHim/ForHim3.webp"
-              alt="Linen Pants"
+              src={forHimImages[2]}
+              alt={forHimBannerMap['Home-forHim3']?.title || "Home-forHim3"}
               fill
               className="object-cover"
               sizes="25vw"
@@ -91,8 +169,8 @@ export default function ForHim() {
           {/* Image 4 - Sleep Sets */}
           <div className="relative w-full aspect-3/4">
             <Image
-              src="/images/forHim/ForHim4.webp"
-              alt="Sleep Sets"
+              src={forHimImages[3]}
+              alt={forHimBannerMap['Home-forHim4']?.title || "Home-forHim4"}
               fill
               className="object-cover"
               sizes="25vw"

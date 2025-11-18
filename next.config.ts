@@ -31,6 +31,8 @@ const nextConfig: NextConfig = {
         hostname: '**',
       },
     ],
+    // Use unoptimized to bypass the private IP check
+    unoptimized: true,
   },
 };
 

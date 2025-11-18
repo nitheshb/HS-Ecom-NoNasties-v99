@@ -2,13 +2,101 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { getBanners, Banner } from '@/services/read/banner';
+
+const HERO_TITLES = ['Hero-img-1', 'Hero-img-2', 'Hero-img-3', 'Hero-img-4'] as const;
+
+const extractImageUrl = (banner?: Banner): string => {
+  if (!banner) return '';
+
+  const normalizeString = (value?: unknown) =>
+    typeof value === 'string' ? value.trim() : '';
+
+  // First, try the img field (most direct)
+  const directImg = normalizeString(banner.img);
+  if (directImg) {
+    return directImg;
+  }
+
+  // Then try images array/object
+  if (banner.images) {
+    // Handle both array and object with numeric keys
+    const imagesArray = Array.isArray(banner.images) 
+      ? banner.images 
+      : Object.values(banner.images);
+
+    for (const entry of imagesArray) {
+      if (typeof entry === 'string') {
+        const normalized = normalizeString(entry);
+        if (normalized) {
+          return normalized;
+        }
+      } else if (entry && typeof entry === 'object') {
+        const candidate =
+          normalizeString(entry.url) ||
+          normalizeString(entry.link) ||
+          normalizeString(entry.downloadURL) ||
+          normalizeString(entry.src) ||
+          normalizeString(entry.imageUrl);
+
+        if (candidate) {
+          return candidate;
+        }
+      }
+    }
+  }
+
+  return '';
+};
 
 export default function Hero() {
   const [isHovered1, setIsHovered1] = useState(false);
   const [isHovered2, setIsHovered2] = useState(false);
   const [isHovered3, setIsHovered3] = useState(false);
   const [isHovered4, setIsHovered4] = useState(false);
+  const [heroBannerMap, setHeroBannerMap] = useState<Record<string, Banner>>({});
+
+  useEffect(() => {
+    const fetchBanners = async () => {
+      try {
+        const allBanners = await getBanners();
+        const filtered = allBanners.filter((banner) =>
+          HERO_TITLES.includes(banner.title as typeof HERO_TITLES[number])
+        );
+
+        const bannerMap = filtered.reduce<Record<string, Banner>>((acc, banner) => {
+          acc[banner.title] = banner;
+          return acc;
+        }, {});
+
+        setHeroBannerMap(bannerMap);
+      } catch (error) {
+        console.error('Failed to load hero banners:', error);
+      }
+    };
+
+    void fetchBanners();
+  }, []);
+
+  const heroImages = useMemo(() => {
+    return HERO_TITLES.map((title) => extractImageUrl(heroBannerMap[title]));
+  }, [heroBannerMap]);
+
+  const hasAllImages = heroImages.every((img) => !!img);
+  if (!hasAllImages) {
+    return null;
+  }
+
+  const heroLinks = HERO_TITLES.map((title, index) => {
+    const banner = heroBannerMap[title];
+    if (banner?.redirect_url && banner.redirect_url.trim().length > 0) {
+      return banner.redirect_url;
+    }
+    // fallback to original destinations to avoid empty hrefs
+    if (index === 0 || index === 2) return '/her';
+    return '/him';
+  });
 
   return (
     <section className="relative overflow-hidden">
@@ -16,8 +104,8 @@ export default function Hero() {
         {/* Row 1 - Image 1 */}
         <div className="relative h-[120vh]">
           <Image
-            src="/images/hero/Hero1.webp"
-            alt="Hero 1"
+            src={heroImages[0]}
+            alt="Hero-img-1"
             fill
             className="object-cover"
             priority
@@ -38,7 +126,7 @@ export default function Hero() {
 
           <div className="absolute top-[58%] left-8 right-8 z-10">
             <Link
-              href="/her"
+              href={heroLinks[0]}
               className="inline-block bg-black text-yellow-400 px-8 py-4 transition font-semibold overflow-hidden relative"
               onMouseEnter={() => setIsHovered1(true)}
               onMouseLeave={() => setIsHovered1(false)}
@@ -53,8 +141,8 @@ export default function Hero() {
         {/* Row 1 - Image 2 */}
         <div className="relative h-[120vh]">
           <Image
-            src="/images/hero/Hero2.webp"
-            alt="Hero 2"
+            src={heroImages[1]}
+            alt="Hero-img-2"
             fill
             className="object-cover"
             priority
@@ -75,7 +163,7 @@ export default function Hero() {
 
           <div className="absolute top-[58%] left-8 right-8 z-10">
             <Link
-              href="/him"
+              href={heroLinks[1]}
               className="inline-block bg-black text-yellow-400 px-8 py-4 transition font-semibold overflow-hidden relative"
               onMouseEnter={() => setIsHovered2(true)}
               onMouseLeave={() => setIsHovered2(false)}
@@ -90,8 +178,8 @@ export default function Hero() {
         {/* Row 2 - Image 3 */}
         <div className="relative h-[120vh]">
           <Image
-            src="/images/hero/Hero3.webp"
-            alt="Hero 3"
+            src={heroImages[2]}
+            alt="Hero-img-3"
             fill
             className="object-cover"
             sizes="50vw"
@@ -111,7 +199,7 @@ export default function Hero() {
 
           <div className="absolute top-[58%] left-8 right-8 z-10">
             <Link
-              href="/her"
+              href={heroLinks[2]}
               className="inline-block bg-black text-yellow-400 px-8 py-4 transition font-semibold overflow-hidden relative"
               onMouseEnter={() => setIsHovered3(true)}
               onMouseLeave={() => setIsHovered3(false)}
@@ -126,8 +214,8 @@ export default function Hero() {
         {/* Row 2 - Image 4 */}
         <div className="relative h-[120vh]">
           <Image
-            src="/images/hero/Hero4.webp"
-            alt="Hero 4"
+            src={heroImages[3]}
+            alt="Hero-img-4"
             fill
             className="object-cover"
             sizes="50vw"
@@ -147,7 +235,7 @@ export default function Hero() {
 
           <div className="absolute top-[58%] left-8 right-8 z-10">
             <Link
-              href="/him"
+              href={heroLinks[3]}
               className="inline-block bg-black text-yellow-400 px-8 py-4 transition font-semibold overflow-hidden relative"
               onMouseEnter={() => setIsHovered4(true)}
               onMouseLeave={() => setIsHovered4(false)}
