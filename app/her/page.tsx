@@ -4,9 +4,11 @@
 import Image from 'next/image';
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { useCart } from '@/lib/cart-context';
 import { 
   getHerProducts, 
   getProductName, 
+  getProductDescription,
   getProductImage,
   type Product 
 } from '@/lib/products';
@@ -74,6 +76,7 @@ export default function HerPage() {
   const searchParams = useSearchParams();
   const filterValue = searchParams.get('filter') || 'all';
   
+  const { addItem, setIsCartOpen } = useCart();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -164,6 +167,26 @@ export default function HerPage() {
     return rows;
   }, [subHeroProducts]);
 
+  const handleAddToCart = async (product: Product) => {
+    const productName = getProductName(product);
+    const productPrice = product.price || product.strike_price || 0;
+    const productImage = getProductImage(product);
+    
+    try {
+      await addItem({
+        id: product.id,
+        name: productName,
+        price: productPrice,
+        size: 'M',
+        quantity: 1,
+        image: productImage,
+      });
+      setIsCartOpen(true);
+    } catch (error) {
+      console.error('Error adding to cart:', error);
+    }
+  };
+
   return (
     <div className="min-h-screen pb-12">
       <div className="w-full px-8 py-4 border-t border-gray-200 mt-20">
@@ -198,7 +221,8 @@ export default function HerPage() {
         </div>
       </div>
 
-      {hasHeroImages && (
+      {/* Hero images - only show when showing ALL products (no filter) */}
+      {filterValue === 'all' && hasHeroImages && (
         <section className="relative w-full bg-white min-h-[148vh] lg:min-h-[170vh] pb-8">
           <div className="flex flex-col lg:flex-row w-full gap-12">
             <div className="w-full lg:w-2/5 flex flex-col justify-start pt-8 lg:pt-20 px-6 lg:pl-12">
@@ -234,8 +258,8 @@ export default function HerPage() {
         </section>
       )}
 
-      {/* Sub hero images with green text area */}
-      {hasSubHeroImages && (
+      {/* Sub hero images with green text area - only show when showing ALL products (no filter) */}
+      {filterValue === 'all' && hasSubHeroImages && (
         <div className="w-full">
           {subHeroRows.map((row, rowIndex) => (
             <section key={rowIndex} className="w-full flex flex-col md:flex-row mb-4 last:mb-0">
@@ -311,18 +335,27 @@ export default function HerPage() {
               <div className={gridClasses}>
                 {products.map((product) => {
                   const productName = getProductName(product);
+                  const productDescription = getProductDescription(product);
                   const productPrice = product.price || product.strike_price || 0;
                   const productImage = getProductImage(product);
                   
-                  // Debug: Log image URL
-                  if (product.id === products[0]?.id) {
-                    console.log('First product image:', {
-                      productId: product.id,
-                      img: product.img,
-                      images: product.images,
-                      finalImage: productImage,
-                      allFields: Object.keys(product).filter(k => k.toLowerCase().includes('image') || k.toLowerCase().includes('img'))
-                    });
+                  // Get category - avoid showing UUIDs or IDs
+                  let category = 'Organic Cotton';
+                  if (product.category && typeof product.category === 'string') {
+                    // Check if it's not a UUID (UUIDs have dashes and are long)
+                    if (!product.category.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+                      category = product.category;
+                    }
+                  }
+                  // Don't use category_id if it looks like a UUID
+                  const categoryId = product.category_id;
+                  if (categoryId && typeof categoryId === 'string' && category === 'Organic Cotton') {
+                    // If category_id is not a UUID and we don't have a category name, we could fetch it
+                    // But for now, just don't show UUIDs
+                    if (!categoryId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+                      // Only use if it's not a UUID
+                      category = categoryId;
+                    }
                   }
                   
                   return (
@@ -347,10 +380,25 @@ export default function HerPage() {
                           <span className="text-gray-400 text-sm">No Image</span>
                         </div>
                       </div>
-                      <div className="px-2 py-3">
+                      <div className="p-2">
+                        <p className="font-semibold mb-1 line-clamp-2">{productName}</p>
+                        <p className="text-gray-600 text-sm mb-2">{category}</p>
+                        {productDescription && productDescription !== 'Organic Cotton' && (
+                          <p className="text-gray-500 text-xs mb-2 line-clamp-2">{productDescription}</p>
+                        )}
                         <div className="flex items-center justify-between">
-                          <p className="font-semibold text-sm">{productName}</p>
-                          <p className="text-sm font-semibold">₹ {productPrice}</p>
+                          <div>
+                            {product.strike_price && product.strike_price > (product.price || 0) && (
+                              <p className="text-sm text-gray-400 line-through">₹ {product.strike_price}</p>
+                            )}
+                            <p className="text-lg font-bold">₹ {productPrice}</p>
+                          </div>
+                          <button
+                            onClick={() => handleAddToCart(product)}
+                            className="px-4 py-1 bg-black text-white text-sm rounded hover:bg-gray-800 transition whitespace-nowrap"
+                          >
+                            Add to Cart
+                          </button>
                         </div>
                       </div>
                     </div>
