@@ -3,12 +3,14 @@
 
 import Image from 'next/image';
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { 
   getHerProducts, 
   getProductName, 
   getProductImage,
   type Product 
 } from '@/lib/products';
+import { getFilteredProducts } from '@/lib/product-filters';
 import { Filter, LayoutGrid, Grid3X3 } from 'lucide-react';
 
 const HER_HERO_TITLES = ['ForHerHero-img1', 'ForHerHero-img2', 'ForHerHero-img3', 'ForHerHero-img4'] as const;
@@ -69,6 +71,9 @@ const extractSubHeroNumber = (title: string): number => {
 };
 
 export default function HerPage() {
+  const searchParams = useSearchParams();
+  const filterValue = searchParams.get('filter') || 'all';
+  
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -81,12 +86,14 @@ export default function HerPage() {
       try {
         setLoading(true);
         setError(null);
-        const fetchedProducts = await getHerProducts(100);
+        
+        // Fetch all products for HER section (for hero images)
+        const allHerProducts = await getHerProducts(100);
         const heroMap: Record<string, Product> = {};
         const subHeroMap: Record<string, Product> = {};
-        const nonHeroProducts: Product[] = [];
-
-        for (const product of fetchedProducts) {
+        
+        // Separate hero images from regular products
+        for (const product of allHerProducts) {
           const matchedHeroTitle = matchesHeroTitle(product);
           const matchedSubHeroTitle = matchesSubHeroTitle(product);
           
@@ -94,14 +101,15 @@ export default function HerPage() {
             heroMap[matchedHeroTitle] = product;
           } else if (matchedSubHeroTitle) {
             subHeroMap[matchedSubHeroTitle] = product;
-          } else {
-            nonHeroProducts.push(product);
           }
         }
-
+        
         setHeroProductMap(heroMap);
         setSubHeroProductMap(subHeroMap);
-        setProducts(nonHeroProducts);
+        
+        // Fetch filtered products based on URL filter parameter
+        const filteredProducts = await getFilteredProducts('her', filterValue);
+        setProducts(filteredProducts);
       } catch (err) {
         console.error('Error fetching products:', err);
         setError('Failed to load products. Please check your Firebase connection.');
@@ -111,7 +119,7 @@ export default function HerPage() {
     }
     
     fetchProducts();
-  }, []);
+  }, [filterValue]);
 
   const heroImages = useMemo(() => {
     return HER_HERO_TITLES.map((title) => {

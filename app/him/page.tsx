@@ -2,6 +2,7 @@
 
 import { useCart } from '@/lib/cart-context';
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { 
   getHimProducts, 
   getProductName, 
@@ -9,8 +10,12 @@ import {
   getProductImage,
   type Product 
 } from '@/lib/products';
+import { getFilteredProducts } from '@/lib/product-filters';
 
 export default function HimPage() {
+  const searchParams = useSearchParams();
+  const filterValue = searchParams.get('filter') || 'all';
+  
   const { addItem, setIsCartOpen } = useCart();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -21,8 +26,10 @@ export default function HimPage() {
       try {
         setLoading(true);
         setError(null);
-        const fetchedProducts = await getHimProducts(100);
-        setProducts(fetchedProducts);
+        
+        // Fetch filtered products based on URL filter parameter
+        const filteredProducts = await getFilteredProducts('him', filterValue);
+        setProducts(filteredProducts);
       } catch (err) {
         console.error('Error fetching products:', err);
         setError('Failed to load products. Please check your Firebase connection.');
@@ -32,7 +39,7 @@ export default function HimPage() {
     }
     
     fetchProducts();
-  }, []);
+  }, [filterValue]);
 
   const handleAddToCart = (product: Product) => {
     const productName = getProductName(product);
