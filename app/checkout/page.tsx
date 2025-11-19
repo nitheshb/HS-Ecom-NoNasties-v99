@@ -1,12 +1,16 @@
 'use client';
 
 import { useCart } from '@/lib/cart-context';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { createOrder } from '@/services/create/order';
+import { getOrderDependencies } from '@/lib/order-helpers';
+import { auth } from '@/app/db';
 
 export default function CheckoutPage() {
   const { items, getTotal, clearCart } = useCart();
   const router = useRouter();
+  const [isPlacingOrder, setIsPlacingOrder] = useState(false);
 
   useEffect(() => {
     if (items.length === 0) {
@@ -24,10 +28,59 @@ export default function CheckoutPage() {
 
   const total = getTotal();
 
-  const handlePlaceOrder = () => {
-    alert('Order placed successfully! (This is a demo)');
-    clearCart();
-    router.push('/');
+  const handlePlaceOrder = async () => {
+    if (isPlacingOrder || items.length === 0) return;
+    
+    setIsPlacingOrder(true);
+    
+    try {
+      const products: Record<string, number> = {};
+      items.forEach(item => {
+        products[item.id] = (products[item.id] || 0) + item.quantity;
+      });
+
+      const user = auth.currentUser;
+      
+      const orderPayload = {
+        products,
+        total_price: total,
+        order_items_count: items.length,
+        status: 'new',
+        order_status: 'new',
+        user: user ? {
+          id: user.uid,
+          email: user.email,
+        } : {},
+        address: {},
+        currency: { code: 'INR', symbol: '₹' },
+        delivery_fee: 0,
+        commission_fee: 0,
+        origin_price: total,
+        split: 1,
+        paid_by_split: false,
+        current: true,
+        delivery_type: 'standard',
+        delivery_date: new Date().toISOString(),
+        delivery_date_time: new Date().toISOString(),
+        delivery_time: 'standard',
+        otp: Math.floor(1000 + Math.random() * 9000),
+        shop: {},
+        deliveryman: null,
+        location: {},
+      };
+
+      const dependencies = getOrderDependencies();
+      const order = await createOrder(orderPayload, dependencies);
+      
+      clearCart();
+      alert(`Order placed successfully! Order ID: ${order.id}`);
+      router.push('/');
+    } catch (error) {
+      console.error('Error placing order:', error);
+      alert(`Failed to place order: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsPlacingOrder(false);
+    }
   };
 
   if (items.length === 0) {
@@ -72,9 +125,10 @@ export default function CheckoutPage() {
               </p>
               <button
                 onClick={handlePlaceOrder}
-                className="w-full bg-green-600 text-white py-3 px-6 rounded font-semibold hover:bg-green-700 transition"
+                disabled={isPlacingOrder}
+                className="w-full bg-green-600 text-white py-3 px-6 rounded font-semibold hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                PLACE ORDER
+                {isPlacingOrder ? 'PLACING ORDER...' : 'PLACE ORDER'}
               </button>
             </div>
 

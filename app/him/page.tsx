@@ -41,20 +41,24 @@ export default function HimPage() {
     fetchProducts();
   }, [filterValue]);
 
-  const handleAddToCart = (product: Product) => {
+  const handleAddToCart = async (product: Product) => {
     const productName = getProductName(product);
     const productPrice = product.price || product.strike_price || 0;
     const productImage = getProductImage(product);
     
-    addItem({
-      id: product.id,
-      name: productName,
-      price: productPrice,
-      size: 'M',
-      quantity: 1,
-      image: productImage,
-    });
-    setIsCartOpen(true);
+    try {
+      await addItem({
+        id: product.id,
+        name: productName,
+        price: productPrice,
+        size: 'M',
+        quantity: 1,
+        image: productImage,
+      });
+      setIsCartOpen(true);
+    } catch (error) {
+      console.error('Error adding to cart:', error);
+    }
   };
 
   return (

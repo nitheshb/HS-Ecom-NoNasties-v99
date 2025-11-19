@@ -4,6 +4,8 @@
  * Helper functions to filter products by category and subcategory
  */
 
+'use client';
+
 import { getAllCategories } from '@/services/read/category';
 import { getAllSubCategories } from '@/services/read/subCategory';
 import { getAllProducts } from '@/services/read/product';
