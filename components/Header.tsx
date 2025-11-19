@@ -5,10 +5,12 @@ import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import { Menu, X, Search, ShoppingBag, User } from 'lucide-react';
 import { useCart } from '@/lib/cart-context';
+import { useAuth } from '@/lib/auth-context';
 
 export default function Header() {
   const pathname = usePathname();
   const { setIsCartOpen, getItemCount } = useCart();
+  const { user } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
@@ -19,9 +21,16 @@ export default function Header() {
 
   // Fix hydration error by only rendering cart count after mount
   useEffect(() => {
-    setIsMounted(true);
+    // Use setTimeout to avoid synchronous state update in effect
+    const timer = setTimeout(() => {
+      setIsMounted(true);
+    }, 0);
+    return () => clearTimeout(timer);
   }, []);
 
+  // Check if we're on auth pages (signup/login) - show only logo
+  const isAuthPage = pathname === '/signup' || pathname === '/login';
+  
   // Check if we're on the homepage
   const isHomePage = pathname === '/';
 
@@ -43,6 +52,21 @@ export default function Header() {
   // Determine header style: if not on homepage, always white background with black text
   // On homepage, use transparent when not scrolled, white when scrolled
   const shouldUseWhiteBg = !isHomePage || isScrolled || isDropdownOpen;
+
+  // If on auth pages, show only logo
+  if (isAuthPage) {
+    return (
+      <header className="fixed top-0 left-0 right-0 z-50 bg-white">
+        <nav className="w-full px-8">
+          <div className="flex items-center justify-center py-4">
+            <Link href="/" className="text-2xl font-bold italic transition-colors leading-none text-[#171717]">
+              no nasties +
+            </Link>
+          </div>
+        </nav>
+      </header>
+    );
+  }
 
   return (
     <header className={`fixed top-0 left-0 right-0 z-50 transition-colors duration-75 ${shouldUseWhiteBg ? 'bg-white' : 'bg-transparent'}`}>
@@ -195,13 +219,23 @@ export default function Header() {
 
           {/* Right side icons */}
           <div className="flex items-center gap-4">
-            <Link
-              href="/login"
-              className={`hover:opacity-80 transition ${shouldUseWhiteBg ? 'text-[#171717]' : 'text-white'}`}
-              aria-label="Account"
-            >
-              <User size={20} />
-            </Link>
+            {user ? (
+              <Link
+                href="/orders"
+                className={`hover:opacity-80 transition ${shouldUseWhiteBg ? 'text-[#171717]' : 'text-white'}`}
+                aria-label="Account"
+              >
+                <User size={20} />
+              </Link>
+            ) : (
+              <Link
+                href="/login"
+                className={`hover:opacity-80 transition ${shouldUseWhiteBg ? 'text-[#171717]' : 'text-white'}`}
+                aria-label="Account"
+              >
+                <User size={20} />
+              </Link>
+            )}
             <button
               onClick={() => setIsSearchOpen(!isSearchOpen)}
               className={`hover:opacity-80 transition ${shouldUseWhiteBg ? 'text-[#171717]' : 'text-white'}`}
