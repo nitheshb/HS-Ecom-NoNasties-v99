@@ -16,7 +16,7 @@ export interface UserData {
  * This stores additional user data beyond what Firebase Auth provides
  */
 export async function createUserDocument(user: User, name: string): Promise<void> {
-  const userRef = doc(db, 'T_users', user.uid);
+  const userRef = doc(db, 'users', user.uid);
   
   const userData: UserData = {
     uid: user.uid,
@@ -39,7 +39,7 @@ export async function createUserDocument(user: User, name: string): Promise<void
  * Update user document in Firestore
  */
 export async function updateUserDocument(uid: string, updates: Partial<UserData>): Promise<void> {
-  const userRef = doc(db, 'T_users', uid);
+  const userRef = doc(db, 'users', uid);
   
   await setDoc(userRef, {
     ...updates,

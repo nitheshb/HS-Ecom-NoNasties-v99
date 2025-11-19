@@ -2,7 +2,7 @@ import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '@/app/db';
 import { v4 as uuidv4 } from 'uuid';
 
-const USERS_COLLECTION = 'T_users';
+const USERS_COLLECTION = 'users';
 
 export interface Address {
   id: string;

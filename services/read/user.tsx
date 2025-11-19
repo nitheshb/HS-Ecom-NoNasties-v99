@@ -2,7 +2,7 @@ import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '@/app/db';
 import { serverTimestamp } from 'firebase/firestore';
 
-const USERS_COLLECTION = 'T_users';
+const USERS_COLLECTION = 'users';
 
 export interface UserData {
   uid: string;
