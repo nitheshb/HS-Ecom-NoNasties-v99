@@ -73,7 +73,22 @@ export const checkStockAvailability = async (
   try {
     const stocks = await getStocksByProductId(productId);
     
+    // Debug logging to see what we're reading from database
+    console.log(`[Stock Check] Product ID: ${productId}`);
+    console.log(`[Stock Check] Found ${stocks.length} stock entries:`);
+    stocks.forEach((stock, index) => {
+      console.log(`[Stock Check]   Stock ${index + 1}:`, {
+        stockId: stock.id,
+        countable_id: stock.countable_id,
+        sku: stock.sku,
+        quantity: stock.quantity,
+        quantityType: typeof stock.quantity,
+        quantityNumber: Number(stock.quantity),
+      });
+    });
+    
     if (stocks.length === 0) {
+      console.log(`[Stock Check] ❌ No stocks found for product ${productId}`);
       return {
         available: false,
         availableQuantity: 0,
@@ -83,9 +98,17 @@ export const checkStockAvailability = async (
 
     // Sum up all available quantities
     const totalAvailableQuantity = stocks.reduce(
-      (sum, stock) => sum + (Number(stock.quantity) || 0),
+      (sum, stock) => {
+        const qty = Number(stock.quantity) || 0;
+        console.log(`[Stock Check] Adding quantity: ${qty} (from stock ${stock.id}, original value: ${stock.quantity}, type: ${typeof stock.quantity})`);
+        return sum + qty;
+      },
       0
     );
+
+    console.log(`[Stock Check] ✅ Total available quantity for product ${productId}: ${totalAvailableQuantity}`);
+    console.log(`[Stock Check] Requested quantity: ${requestedQuantity}`);
+    console.log(`[Stock Check] Available: ${totalAvailableQuantity >= requestedQuantity}`);
 
     return {
       available: totalAvailableQuantity >= requestedQuantity,

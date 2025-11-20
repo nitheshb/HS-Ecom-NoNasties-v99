@@ -1,13 +1,16 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { getUserOrders, getOrderItemsForOrder } from '@/services/read/user-orders';
 import { Order, OrderItem } from '@/services/read/order';
 import { cancelUserOrder } from '@/services/cancel/user-order';
+import { cancelUserOrderItem } from '@/services/cancel/user-order-item';
+import { returnUserOrderItem } from '@/services/return/user-order-item';
 import Link from 'next/link';
 import { getStatusBadgeClasses, getDefaultBadgeClasses } from '@/utils/statusColors';
+import OrderStatusProgress from '@/components/OrderStatusProgress';
 
 export default function OrdersPage() {
   const { user, loading: authLoading } = useAuth();
@@ -15,14 +18,10 @@ export default function OrdersPage() {
   const [loading, setLoading] = useState(true);
   const [orderItemsMap, setOrderItemsMap] = useState<Record<string, OrderItem[]>>({});
   const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
+  const [cancellingItemId, setCancellingItemId] = useState<string | null>(null);
+  const [returningItemId, setReturningItemId] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!authLoading && user) {
-      fetchOrders();
-    }
-  }, [user, authLoading]);
-
-  const fetchOrders = async () => {
+  const fetchOrders = useCallback(async () => {
     if (!user) return;
     
     try {
@@ -47,7 +46,13 @@ export default function OrdersPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    if (!authLoading && user) {
+      fetchOrders();
+    }
+  }, [user, authLoading, fetchOrders]);
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('en-IN', {
@@ -94,9 +99,84 @@ export default function OrdersPage() {
     }
   };
 
+  const handleCancelOrderItem = async (orderItemId: string, itemName: string) => {
+    if (!confirm(`Are you sure you want to cancel "${itemName}"? The stock will be restored.`)) {
+      return;
+    }
+
+    try {
+      setCancellingItemId(orderItemId);
+      await cancelUserOrderItem(orderItemId, 'Cancelled by user');
+      
+      // Refresh orders list
+      await fetchOrders();
+      alert('Item cancelled successfully. Stock has been restored.');
+    } catch (error) {
+      console.error('Error cancelling order item:', error);
+      alert('An error occurred while cancelling the item. Please try again.');
+    } finally {
+      setCancellingItemId(null);
+    }
+  };
+
+  const handleReturnOrderItem = async (orderItemId: string, itemName: string) => {
+    if (!confirm(`Are you sure you want to return "${itemName}"?`)) {
+      return;
+    }
+
+    try {
+      setReturningItemId(orderItemId);
+      await returnUserOrderItem(orderItemId, 'Returned by user');
+      
+      // Refresh orders list
+      await fetchOrders();
+      alert('Return request submitted successfully.');
+    } catch (error) {
+      console.error('Error returning order item:', error);
+      alert('An error occurred while processing the return. Please try again.');
+    } finally {
+      setReturningItemId(null);
+    }
+  };
+
+  // Check if order can be cancelled (only Placed or Packed)
   const isOrderCancellable = (order: Order) => {
     const status = (order.order_status || order.status || '').toLowerCase();
-    return status !== 'cancelled' && status !== 'delivered' && status !== 'completed';
+    return status === 'placed' || status === 'packed' || status === 'new' || status === 'orderreceived' || status === 'order received';
+  };
+
+  // Check if order item can be cancelled (only Placed or Packed)
+  const isOrderItemCancellable = (item: OrderItem) => {
+    const status = (item.order_item_status || item.status || '').toLowerCase();
+    return status === 'placed' || status === 'packed' || status === 'new' || status === 'orderreceived' || status === 'order received';
+  };
+
+  // Check if order item can be returned (Delivered and within return window)
+  const isOrderItemReturnable = (item: OrderItem, order: Order) => {
+    const status = (item.order_item_status || item.status || '').toLowerCase();
+    const orderStatus = (order.order_status || order.status || '').toLowerCase();
+    
+    // Must be delivered
+    if (status !== 'delivered' && orderStatus !== 'delivered') {
+      return false;
+    }
+
+    // Check return window (7 days from delivery date)
+    const RETURN_WINDOW_DAYS = 7;
+    const deliveryDate = item.delivery_date 
+      ? new Date(typeof item.delivery_date === 'number' ? item.delivery_date : item.delivery_date)
+      : order.delivery_date 
+        ? new Date(order.delivery_date)
+        : null;
+
+    if (!deliveryDate) {
+      return false; // Can't return if we don't know delivery date
+    }
+
+    const now = new Date();
+    const daysSinceDelivery = Math.floor((now.getTime() - deliveryDate.getTime()) / (1000 * 60 * 60 * 24));
+    
+    return daysSinceDelivery <= RETURN_WINDOW_DAYS;
   };
 
   // Format status label for display (e.g., "orderReceived" -> "Order Received")
@@ -108,20 +188,22 @@ export default function OrdersPage() {
     
     // Map status values to display labels
     const statusLabels: Record<string, string> = {
-      'new': 'New',
-      'cancelled': 'Cancelled',
-      'delivered': 'Delivered',
-      'delivery': 'Delivery',
-      'orderreceived': 'Order Received',
-      'order received': 'Order Received',
-      'order-received': 'Order Received',
-      'order_received': 'Order Received',
-      'return': 'Return',
-      'completed': 'Completed',
-      'fulfilled': 'Fulfilled',
-      'pending': 'Pending',
-      'processing': 'Processing',
+      'new': 'Placed',
+      'placed': 'Placed',
+      'packed': 'Packed',
       'shipped': 'Shipped',
+      'delivered': 'Delivered',
+      'cancelled': 'Cancelled',
+      'delivery': 'Delivery',
+      'orderreceived': 'Placed',
+      'order received': 'Placed',
+      'order-received': 'Placed',
+      'order_received': 'Placed',
+      'return': 'Return',
+      'completed': 'Delivered',
+      'fulfilled': 'Delivered',
+      'pending': 'Placed',
+      'processing': 'Processing',
     };
     
     // Check if we have a specific label for this status
@@ -178,62 +260,180 @@ export default function OrdersPage() {
             <div className="space-y-6">
               {orders.map((order) => {
                 const items = orderItemsMap[order.id] || [];
-                return (
-                  <div key={order.id} className="bg-white rounded-lg shadow-sm p-6">
-                    <div className="flex justify-between items-start mb-4">
-                      <div>
-                        <h3 className="text-lg font-semibold">Order #{order.id}</h3>
-                        <p className="text-sm text-gray-600 mt-1">
-                          Placed on {formatDate(order.created_at)}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-lg font-bold">{formatPrice(order.total_price)}</p>
-                        <span className={`inline-block mt-2 px-3 py-1 rounded-full text-xs font-medium ${getStatusBadgeClass(order.order_status || order.status)}`}>
-                          {formatStatusLabel(order.order_status || order.status)}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Order Items */}
-                    {items.length > 0 && (
-                      <div className="mt-4 pt-4 border-t border-gray-200">
-                        <h4 className="text-sm font-semibold mb-3">Items:</h4>
-                        <div className="space-y-2">
-                          {items.map((item, index) => (
-                            <div key={item.order_item_id || index} className="flex justify-between text-sm">
-                              <span>
-                                {item.name || `Product ${item.product_id}`} × {item.quantity}
-                              </span>
-                              <span className="font-medium">{formatPrice(item.subtotal)}</span>
-                            </div>
-                          ))}
+                
+                // If no items, show order card anyway
+                if (items.length === 0) {
+                  return (
+                    <div key={order.id} className="bg-white rounded-lg shadow-sm p-6">
+                      <div className="flex justify-between items-start mb-4">
+                        <div>
+                          <h3 className="text-lg font-semibold">Order #{order.id}</h3>
+                          <p className="text-sm text-gray-600 mt-1">
+                            Placed on {formatDate(order.created_at)}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-lg font-bold">{formatPrice(order.total_price)}</p>
+                          <span className={`inline-block mt-2 px-3 py-1 rounded-full text-xs font-medium ${getStatusBadgeClass(order.order_status || order.status)}`}>
+                            {formatStatusLabel(order.order_status || order.status)}
+                          </span>
                         </div>
                       </div>
-                    )}
+                      <div className="mt-6 pt-6 border-t border-gray-200">
+                        <OrderStatusProgress 
+                          status={order.order_status || order.status || 'placed'} 
+                          className="w-full"
+                        />
+                      </div>
+                    </div>
+                  );
+                }
+                
+                // Group items by product_id to show one card per product
+                // Same product with different quantities should be in one card
+                const groupedItems = items.reduce((acc, item) => {
+                  const productId = item.product_id;
+                  if (!acc[productId]) {
+                    acc[productId] = {
+                      product_id: productId,
+                      name: item.name || `Product ${productId}`,
+                      quantity: 0,
+                      subtotal: 0,
+                      items: [],
+                      order_item_status: item.order_item_status,
+                      delivery_date: item.delivery_date,
+                    };
+                  }
+                  acc[productId].quantity += item.quantity;
+                  acc[productId].subtotal += item.subtotal;
+                  acc[productId].items.push(item);
+                  return acc;
+                }, {} as Record<string, {
+                  product_id: string;
+                  name: string;
+                  quantity: number;
+                  subtotal: number;
+                  items: OrderItem[];
+                  order_item_status?: string;
+                  delivery_date?: number;
+                }>);
 
-                    {/* Order Details */}
-                    <div className="mt-4 pt-4 border-t border-gray-200 flex justify-between items-center">
-                      <div className="text-sm text-gray-600">
-                        <p>Items: {order.order_items_count || items.length}</p>
-                        {order.delivery_date && (
-                          <p className="mt-1">Delivery Date: {formatDate(order.delivery_date)}</p>
+                // Create a separate card for each unique product
+                return Object.values(groupedItems).map((groupedItem, productIndex) => {
+                  // Calculate average price per unit
+                  const pricePerUnit = groupedItem.quantity > 0 
+                    ? groupedItem.subtotal / groupedItem.quantity 
+                    : 0;
+
+                  return (
+                    <div 
+                      key={`${order.id}-${groupedItem.product_id}-${productIndex}`} 
+                      className="bg-white rounded-lg shadow-sm p-6"
+                    >
+                      <div className="flex justify-between items-start mb-4">
+                        <div>
+                          <h3 className="text-lg font-semibold">Order #{order.id}</h3>
+                          <p className="text-sm text-gray-600 mt-1">
+                            Placed on {formatDate(order.created_at)}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-lg font-bold">{formatPrice(groupedItem.subtotal)}</p>
+                          <span className={`inline-block mt-2 px-3 py-1 rounded-full text-xs font-medium ${getStatusBadgeClass(order.order_status || order.status)}`}>
+                            {formatStatusLabel(order.order_status || order.status)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Product Details */}
+                      <div className="mt-4 pt-4 border-t border-gray-200">
+                        <div className="flex items-start gap-4">
+                          <div className="flex-1">
+                            <h4 className="text-base font-semibold mb-1">
+                              {groupedItem.name}
+                            </h4>
+                            <p className="text-sm text-gray-600">
+                              Quantity: {groupedItem.quantity}
+                            </p>
+                            {groupedItem.order_item_status && (
+                              <p className="text-xs text-gray-500 mt-1">
+                                Item Status: {formatStatusLabel(groupedItem.order_item_status)}
+                              </p>
+                            )}
+                          </div>
+                          <div className="text-right">
+                            <p className="text-lg font-bold">{formatPrice(groupedItem.subtotal)}</p>
+                            <p className="text-sm text-gray-500 mt-1">
+                              {formatPrice(pricePerUnit)} each
+                            </p>
+                          </div>
+                        </div>
+                        
+                        {/* Item-level Action Buttons */}
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          {/* Cancel Item Button - Show for each cancellable item */}
+                          {groupedItem.items
+                            .filter(item => isOrderItemCancellable(item) && item.order_item_id)
+                            .map((item) => (
+                              <button
+                                key={`cancel-${item.order_item_id}`}
+                                onClick={() => handleCancelOrderItem(item.order_item_id!, groupedItem.name)}
+                                disabled={cancellingItemId !== null}
+                                className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {cancellingItemId === item.order_item_id ? 'Cancelling...' : 'Cancel Item'}
+                              </button>
+                            ))}
+                          
+                          {/* Return Item Button - Show for each returnable item */}
+                          {groupedItem.items
+                            .filter(item => isOrderItemReturnable(item, order) && item.order_item_id)
+                            .map((item) => (
+                              <button
+                                key={`return-${item.order_item_id}`}
+                                onClick={() => handleReturnOrderItem(item.order_item_id!, groupedItem.name)}
+                                disabled={returningItemId !== null}
+                                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {returningItemId === item.order_item_id ? 'Processing...' : 'Return Item'}
+                              </button>
+                            ))}
+                        </div>
+                      </div>
+
+                      {/* Order Status Progress Bar */}
+                      <div className="mt-6 pt-6 border-t border-gray-200">
+                        <OrderStatusProgress 
+                          status={order.order_status || order.status || 'placed'} 
+                          className="w-full"
+                        />
+                      </div>
+
+                      {/* Order Details */}
+                      <div className="mt-4 pt-4 border-t border-gray-200 flex justify-between items-center">
+                        <div className="text-sm text-gray-600">
+                          {order.delivery_date && (
+                            <p>Delivery Date: {formatDate(order.delivery_date)}</p>
+                          )}
+                          {groupedItem.delivery_date && (
+                            <p className="mt-1">Item Delivery: {formatDate(String(groupedItem.delivery_date))}</p>
+                          )}
+                        </div>
+                        
+                        {/* Cancel Entire Order Button - Only show if order is cancellable (Placed/Packed) */}
+                        {isOrderCancellable(order) && (
+                          <button
+                            onClick={() => handleCancelOrder(order.id)}
+                            disabled={cancellingOrderId === order.id}
+                            className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {cancellingOrderId === order.id ? 'Cancelling...' : 'Cancel Entire Order'}
+                          </button>
                         )}
                       </div>
-                      
-                      {/* Cancel Button */}
-                      {isOrderCancellable(order) && (
-                        <button
-                          onClick={() => handleCancelOrder(order.id)}
-                          disabled={cancellingOrderId === order.id}
-                          className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {cancellingOrderId === order.id ? 'Cancelling...' : 'Cancel Order'}
-                        </button>
-                      )}
                     </div>
-                  </div>
-                );
+                  );
+                });
               })}
             </div>
           )}

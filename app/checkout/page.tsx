@@ -59,8 +59,8 @@ export default function CheckoutPage() {
         products,
         total_price: total,
         order_items_count: items.length,
-        status: 'new',
-        order_status: 'new',
+        status: 'placed',
+        order_status: 'placed',
         user: user ? {
           id: user.uid,
           email: user.email || '',

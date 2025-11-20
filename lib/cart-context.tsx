@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '@/app/db';
 import { CartItem } from '@/types/cart';
@@ -20,6 +20,7 @@ interface CartContextType {
   getItemCount: () => number;
   clearCart: () => Promise<void>;
   isLoading: boolean;
+  getMaxAvailableQuantity: (productId: string) => Promise<number>;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -45,22 +46,43 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const [userId, setUserId] = useState<string | null>(null);
   const isSyncingRef = useRef(false);
 
-  // Listen to auth state changes
+  // Listen to auth state changes and load cart on mount
   useEffect(() => {
+    // Load cart from localStorage immediately on mount (for persistence)
+    const localCart = loadCartFromStorage();
+    if (localCart.length > 0) {
+      setItems(localCart);
+    }
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setUserId(user.uid);
         setIsLoading(true);
         try {
           const cart = await getCart(user.uid);
-          if (cart) {
+          if (cart && cart.items.length > 0) {
+            // If Firebase cart has items, use it (merge with local if needed)
             setItems(cart.items);
             localStorage.removeItem('cart');
           } else {
-            await getOrCreateCart(user.uid);
+            // If no Firebase cart, check if we have local cart to migrate
+            const localCart = loadCartFromStorage();
+            if (localCart.length > 0) {
+              // Migrate local cart to Firebase
+              await updateCartItems(user.uid, localCart);
+              setItems(localCart);
+              localStorage.removeItem('cart');
+            } else {
+              await getOrCreateCart(user.uid);
+            }
           }
         } catch (error) {
           console.error('Error loading cart from Firebase:', error);
+          // Fallback to local cart if Firebase fails
+          const localCart = loadCartFromStorage();
+          if (localCart.length > 0) {
+            setItems(localCart);
+          }
         } finally {
           setIsLoading(false);
         }
@@ -96,11 +118,49 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }
   }, [items, userId, isLoading]);
 
+  // Helper function to check stock considering items already in cart
+  const checkStockWithCart = async (
+    productId: string,
+    requestedQuantity: number,
+    currentCartItems: CartItem[]
+  ): Promise<{ available: boolean; availableQuantity: number; maxAllowed: number }> => {
+    const stockCheck = await checkStockAvailability(productId, requestedQuantity);
+    
+    // Sum ALL quantities in cart for this product ID (regardless of size)
+    // This is important because stock is tracked per product, not per size
+    const totalQuantityInCart = currentCartItems
+      .filter((i) => i.id === productId)
+      .reduce((sum, item) => sum + item.quantity, 0);
+    
+    // Calculate max allowed quantity (available stock - already in cart)
+    const maxAllowed = Math.max(0, stockCheck.availableQuantity - totalQuantityInCart);
+    
+    // Check if requested quantity is available considering cart
+    const available = requestedQuantity <= maxAllowed;
+    
+    return {
+      available,
+      availableQuantity: stockCheck.availableQuantity,
+      maxAllowed,
+    };
+  };
+
   const addItem = async (item: CartItem) => {
     try {
-      const stockCheck = await checkStockAvailability(item.id, item.quantity);
+      // Calculate total quantity that will be in cart after adding this item
+      const existingItem = items.find((i) => i.id === item.id && i.size === item.size);
+      const currentQuantityInCart = existingItem ? existingItem.quantity : 0;
+      const totalQuantityAfterAdd = currentQuantityInCart + item.quantity;
+      
+      // Check stock considering items already in cart (excluding the item we're adding)
+      const otherCartItems = items.filter((i) => !(i.id === item.id && i.size === item.size));
+      const stockCheck = await checkStockWithCart(item.id, totalQuantityAfterAdd, otherCartItems);
+      
       if (!stockCheck.available) {
-        alert(`Sorry, only ${stockCheck.availableQuantity} items available in stock.`);
+        const message = stockCheck.maxAllowed > 0
+          ? `Sorry, only ${stockCheck.maxAllowed} more item(s) available in stock.`
+          : `Sorry, this item is out of stock.`;
+        alert(message);
         return;
       }
 
@@ -109,14 +169,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         setItems(updatedCart.items);
       } else {
         setItems((prevItems) => {
-          const existingItem = prevItems.find((i) => i.id === item.id && i.size === item.size);
-          
           if (existingItem) {
-            const totalQuantity = existingItem.quantity + item.quantity;
-            if (totalQuantity > stockCheck.availableQuantity) {
-              alert(`Sorry, only ${stockCheck.availableQuantity} items available in stock.`);
-              return prevItems;
-            }
             return prevItems.map((i) =>
               i.id === item.id && i.size === item.size
                 ? { ...i, quantity: i.quantity + item.quantity }
@@ -129,7 +182,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (error) {
       console.error('Error adding item to cart:', error);
-      alert('Failed to add item to cart. Please try again.');
+      if (error instanceof Error && error.message.includes('stock')) {
+        alert(error.message);
+      } else {
+        alert('Failed to add item to cart. Please try again.');
+      }
     }
   };
 
@@ -158,14 +215,27 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     try {
       const item = items.find((i) => i.id === id);
       if (item) {
-        const stockCheck = await checkStockAvailability(id, quantity);
+        // Check stock considering items already in cart (excluding current item being updated)
+        // We need to exclude items with the same ID AND size as the current item
+        const otherCartItems = items.filter((i) => !(i.id === id && i.size === item.size));
+        const stockCheck = await checkStockWithCart(id, quantity, otherCartItems);
+        
         if (!stockCheck.available) {
-          alert(`Sorry, only ${stockCheck.availableQuantity} items available in stock.`);
+          const message = stockCheck.maxAllowed > 0
+            ? `Sorry, only ${stockCheck.maxAllowed} item(s) available in stock.`
+            : `Sorry, this item is out of stock.`;
+          alert(message);
           return;
         }
       }
     } catch (error) {
       console.error('Error checking stock:', error);
+      if (error instanceof Error && error.message.includes('stock')) {
+        alert(error.message);
+      } else {
+        alert('Failed to check stock availability. Please try again.');
+      }
+      return;
     }
     
     if (userId) {
@@ -181,6 +251,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         );
       } catch (error) {
         console.error('Error updating quantity:', error);
+        if (error instanceof Error && error.message.includes('stock')) {
+          alert(error.message);
+        } else {
+          alert('Failed to update quantity. Please try again.');
+        }
       }
     } else {
       setItems((prevItems) =>
@@ -190,6 +265,50 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       );
     }
   };
+
+  // Helper function to get max available quantity for an item
+  // Wrapped in useCallback to ensure it always uses the latest items state
+  const getMaxAvailableQuantity = useCallback(async (productId: string): Promise<number> => {
+    try {
+      const stockCheck = await checkStockAvailability(productId, 1);
+      
+      // Find all cart items with this product ID (regardless of size)
+      // Stock is tracked per product, not per size
+      // Use items directly from state (useCallback ensures latest state)
+      const cartItemsForProduct = items.filter((i) => i.id === productId);
+      const totalQuantityInCart = cartItemsForProduct.reduce(
+        (sum, item) => sum + item.quantity,
+        0
+      );
+      
+      // Calculate max available: total stock minus what's already in cart
+      const maxAvailable = Math.max(0, stockCheck.availableQuantity - totalQuantityInCart);
+      
+      // Enhanced debug logging
+      console.log(`[Max Available Qty] Product ID: ${productId}`);
+      console.log(`[Max Available Qty] Total stock from DB: ${stockCheck.availableQuantity}`);
+      console.log(`[Max Available Qty] Current cart items (all):`, items.map(i => ({
+        id: i.id,
+        name: i.name,
+        size: i.size,
+        quantity: i.quantity
+      })));
+      console.log(`[Max Available Qty] Cart items for this product:`, cartItemsForProduct.map(i => ({
+        id: i.id,
+        name: i.name,
+        size: i.size,
+        quantity: i.quantity
+      })));
+      console.log(`[Max Available Qty] Total quantity in cart: ${totalQuantityInCart}`);
+      console.log(`[Max Available Qty] Max available (stock - cart): ${maxAvailable}`);
+      console.log(`[Max Available Qty] Calculation: ${stockCheck.availableQuantity} - ${totalQuantityInCart} = ${maxAvailable}`);
+      
+      return maxAvailable;
+    } catch (error) {
+      console.error('Error getting max available quantity:', error);
+      return 0;
+    }
+  }, [items]); // Depend on items so it always uses latest state
 
   const getTotal = () => {
     return items.reduce((total, item) => total + item.price * item.quantity, 0);
@@ -223,6 +342,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         getItemCount,
         clearCart,
         isLoading,
+        getMaxAvailableQuantity,
       }}
     >
       {children}

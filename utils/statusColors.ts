@@ -88,20 +88,22 @@ export const getStatusColors = (status: string): ColorScheme => {
   const statusLower = status.toLowerCase();
   
   
-  // Specific status color mappings - matching admin panel
+  // Specific status color mappings - matching admin panel and standard order flow
   const specificStatusColors: Record<string, number> = {
     'cancelled': 8,        // Red (index 8)
     'order received': 1,   // Blue (index 1) - FORCED BLUE
     'orderreceived': 1,    // Blue (index 1) - FORCED BLUE
     'delivery': 2,         // Purple (index 2)
-    'delivered': 2,        // Purple (index 2)
+    'delivered': 0,        // Green (index 0) - Changed to green for delivered
     'return': 4,           // Pink (index 4)
-    'new': 1,              // Blue (index 1) - same as order received
+    'new': 6,              // Yellow (index 6) - Changed to yellow for pending/new
+    'placed': 6,           // Yellow (index 6) - Yellow for pending/placed
+    'packed': 3,           // Orange (index 3) - Orange for packed
+    'shipped': 5,          // Indigo (index 5) - Indigo for shipped
     'completed': 0,        // Green (index 0)
     'fulfilled': 0,        // Green (index 0)
     'pending': 6,          // Yellow (index 6)
     'processing': 3,       // Orange (index 3)
-    'shipped': 5,          // Indigo (index 5)
   };
   
   // Also handle common variations - normalize to standard form

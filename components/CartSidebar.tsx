@@ -7,20 +7,77 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
 export default function CartSidebar() {
-  const { items, isCartOpen, setIsCartOpen, updateQuantity, removeItem, getTotal } = useCart();
+  const { items, isCartOpen, setIsCartOpen, updateQuantity, removeItem, getTotal, getMaxAvailableQuantity } = useCart();
   const [isMounted, setIsMounted] = useState(false);
+  const [maxQuantities, setMaxQuantities] = useState<Record<string, number>>({});
+  const [loadingQuantities, setLoadingQuantities] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
+  // Load max quantities for all items
+  useEffect(() => {
+    if (items.length > 0) {
+      const loadMaxQuantities = async () => {
+        console.log('[CartSidebar] Loading max quantities for items:', items.map(i => ({ id: i.id, name: i.name, quantity: i.quantity })));
+        const quantities: Record<string, number> = {};
+        const loading: Record<string, boolean> = {};
+        
+        for (const item of items) {
+          loading[item.id] = true;
+          try {
+            const maxQty = await getMaxAvailableQuantity(item.id);
+            quantities[item.id] = maxQty;
+            console.log(`[CartSidebar] Max quantity for ${item.id} (${item.name}): ${maxQty}`);
+          } catch (error) {
+            console.error(`Error loading max quantity for ${item.id}:`, error);
+            quantities[item.id] = 0;
+          } finally {
+            loading[item.id] = false;
+          }
+        }
+        
+        console.log('[CartSidebar] Final max quantities:', quantities);
+        setMaxQuantities(quantities);
+        setLoadingQuantities(loading);
+      };
+      
+      loadMaxQuantities();
+    } else {
+      // Clear quantities when cart is empty
+      setMaxQuantities({});
+    }
+  }, [items, getMaxAvailableQuantity]);
+
   if (!isMounted) {
     return null;
   }
 
-  const handleQuantityChange = (id: string, currentQuantity: number, change: number) => {
+  const handleQuantityChange = async (id: string, currentQuantity: number, change: number) => {
     const newQuantity = currentQuantity + change;
-    updateQuantity(id, newQuantity);
+    
+    // Get max available quantity for this item
+    const maxQty = maxQuantities[id] ?? await getMaxAvailableQuantity(id);
+    
+    // Block if trying to exceed max quantity
+    if (change > 0 && newQuantity > maxQty) {
+      const message = maxQty > 0
+        ? `Sorry, only ${maxQty} item(s) available in stock.`
+        : 'Sorry, this item is out of stock.';
+      alert(message);
+      return;
+    }
+    
+    await updateQuantity(id, newQuantity);
+    
+    // Refresh max quantity after update
+    try {
+      const updatedMax = await getMaxAvailableQuantity(id);
+      setMaxQuantities(prev => ({ ...prev, [id]: updatedMax }));
+    } catch (error) {
+      console.error('Error refreshing max quantity:', error);
+    }
   };
 
   const handleRemove = (id: string) => {
@@ -113,18 +170,35 @@ export default function CartSidebar() {
                         <div className="flex items-center gap-3 mb-3">
                           <button
                             onClick={() => handleQuantityChange(item.id, item.quantity, -1)}
-                            className="w-8 h-8 flex items-center justify-center border border-gray-300 rounded hover:bg-gray-100 transition"
+                            disabled={item.quantity <= 1}
+                            className="w-8 h-8 flex items-center justify-center border border-gray-300 rounded hover:bg-gray-100 transition disabled:opacity-50 disabled:cursor-not-allowed"
                             aria-label="Decrease quantity"
                           >
                             <Minus size={16} />
                           </button>
-                          <span className="text-sm font-medium w-8 text-center">
-                            {item.quantity}
-                          </span>
+                          <div className="flex flex-col items-center">
+                            <span className="text-sm font-medium w-8 text-center">
+                              {item.quantity}
+                            </span>
+                            {maxQuantities[item.id] !== undefined && (
+                              <span className="text-xs text-gray-500">
+                                Max: {maxQuantities[item.id]}
+                              </span>
+                            )}
+                          </div>
                           <button
                             onClick={() => handleQuantityChange(item.id, item.quantity, 1)}
-                            className="w-8 h-8 flex items-center justify-center border border-gray-300 rounded hover:bg-gray-100 transition"
+                            disabled={
+                              loadingQuantities[item.id] ||
+                              (maxQuantities[item.id] !== undefined && item.quantity >= maxQuantities[item.id])
+                            }
+                            className="w-8 h-8 flex items-center justify-center border border-gray-300 rounded hover:bg-gray-100 transition disabled:opacity-50 disabled:cursor-not-allowed"
                             aria-label="Increase quantity"
+                            title={
+                              maxQuantities[item.id] !== undefined && item.quantity >= maxQuantities[item.id]
+                                ? 'Maximum quantity reached'
+                                : 'Increase quantity'
+                            }
                           >
                             <Plus size={16} />
                           </button>

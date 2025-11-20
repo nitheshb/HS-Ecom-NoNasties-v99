@@ -9,6 +9,7 @@
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { db } from '../../app/db';
 import type { CartItem } from '@/types/cart';
+import { checkStockAvailability } from '../read/stock';
 
 // ============================================
 // CONSTANTS
@@ -86,6 +87,33 @@ export const addItemToCart = async (
       (i) => i.id === item.id && i.size === item.size
     );
 
+    // Calculate total quantity that will be in cart after adding
+    // Sum ALL quantities for this product ID (regardless of size)
+    const currentQuantityForProduct = cart.items
+      .filter((i) => i.id === item.id)
+      .reduce((sum, cartItem) => sum + cartItem.quantity, 0);
+    
+    // Calculate quantity for the specific item being added/updated
+    const currentQuantityForThisItem = existingItemIndex >= 0 
+      ? cart.items[existingItemIndex].quantity 
+      : 0;
+    
+    // Total quantity after adding: remove current item quantity, add new quantity
+    const newTotalQuantity = currentQuantityForProduct - currentQuantityForThisItem + item.quantity;
+
+    // Check stock availability
+    const stockCheck = await checkStockAvailability(item.id, newTotalQuantity);
+    
+    if (!stockCheck.available) {
+      // Calculate max allowed considering what's already in cart
+      const maxAllowed = Math.max(0, stockCheck.availableQuantity - (currentQuantityForProduct - currentQuantityForThisItem));
+      throw new Error(
+        maxAllowed > 0
+          ? `Only ${maxAllowed} more item(s) available in stock.`
+          : 'This item is out of stock.'
+      );
+    }
+
     let updatedItems: CartItem[];
 
     if (existingItemIndex >= 0) {
@@ -118,6 +146,9 @@ export const addItemToCart = async (
     };
   } catch (error) {
     console.error('Error adding item to cart:', error);
+    if (error instanceof Error && error.message.includes('stock')) {
+      throw error; // Re-throw stock-related errors
+    }
     throw new Error('Failed to add item to cart');
   }
 };
