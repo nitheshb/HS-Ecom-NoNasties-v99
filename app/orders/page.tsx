@@ -9,6 +9,8 @@ import { cancelUserOrder, cancelUserOrderItem, returnUserOrderItem } from '@/ser
 import Link from 'next/link';
 import { getStatusBadgeClasses, getDefaultBadgeClasses } from '@/utils/statusColors';
 import OrderStatusProgress from '@/components/OrderStatusProgress';
+import { generateInvoicePDF } from '@/utils/generateInvoice';
+import { Download } from 'lucide-react';
 
 export default function OrdersPage() {
   const { user, loading: authLoading } = useAuth();
@@ -283,6 +285,24 @@ export default function OrdersPage() {
                           className="w-full"
                         />
                       </div>
+
+                      {/* Download Invoice Button for orders without items */}
+                      <div className="mt-4 pt-4 border-t border-gray-200 flex justify-end">
+                        <button
+                          onClick={async () => {
+                            try {
+                              await generateInvoicePDF(order, []);
+                            } catch (error) {
+                              console.error('Error generating invoice:', error);
+                              alert('Failed to generate invoice. Please try again.');
+                            }
+                          }}
+                          className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 transition flex items-center gap-2"
+                        >
+                          <Download size={16} />
+                          Download Invoice
+                        </button>
+                      </div>
                     </div>
                   );
                 }
@@ -408,25 +428,45 @@ export default function OrdersPage() {
                       </div>
 
                       {/* Order Details */}
-                      <div className="mt-4 pt-4 border-t border-gray-200 flex justify-between items-center">
-                        <div className="text-sm text-gray-600">
-                          {order.delivery_date && (
-                            <p>Delivery Date: {formatDate(order.delivery_date)}</p>
-                          )}
-                          {groupedItem.delivery_date && (
-                            <p className="mt-1">Item Delivery: {formatDate(String(groupedItem.delivery_date))}</p>
-                          )}
+                      <div className="mt-4 pt-4 border-t border-gray-200">
+                        <div className="flex justify-between items-start mb-4">
+                          <div className="text-sm text-gray-600">
+                            {order.delivery_date && (
+                              <p>Delivery Date: {formatDate(order.delivery_date)}</p>
+                            )}
+                            {groupedItem.delivery_date && (
+                              <p className="mt-1">Item Delivery: {formatDate(String(groupedItem.delivery_date))}</p>
+                            )}
+                          </div>
+                          
+                          {/* Download Invoice Button */}
+                          <button
+                            onClick={async () => {
+                              try {
+                                await generateInvoicePDF(order, items);
+                              } catch (error) {
+                                console.error('Error generating invoice:', error);
+                                alert('Failed to generate invoice. Please try again.');
+                              }
+                            }}
+                            className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 transition flex items-center gap-2"
+                          >
+                            <Download size={16} />
+                            Download Invoice
+                          </button>
                         </div>
                         
                         {/* Cancel Entire Order Button - Only show if order is cancellable (Placed/Packed) */}
                         {isOrderCancellable(order) && (
-                          <button
-                            onClick={() => handleCancelOrder(order.id)}
-                            disabled={cancellingOrderId === order.id}
-                            className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            {cancellingOrderId === order.id ? 'Cancelling...' : 'Cancel Entire Order'}
-                          </button>
+                          <div className="flex justify-end">
+                            <button
+                              onClick={() => handleCancelOrder(order.id)}
+                              disabled={cancellingOrderId === order.id}
+                              className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {cancellingOrderId === order.id ? 'Cancelling...' : 'Cancel Entire Order'}
+                            </button>
+                          </div>
                         )}
                       </div>
                     </div>
