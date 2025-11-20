@@ -7,6 +7,7 @@ import { getUserOrders, getOrderItemsForOrder } from '@/services/read/user-order
 import { Order, OrderItem } from '@/services/read/order';
 import { cancelUserOrder } from '@/services/cancel/user-order';
 import Link from 'next/link';
+import { getStatusBadgeClasses, getDefaultBadgeClasses } from '@/utils/statusColors';
 
 export default function OrdersPage() {
   const { user, loading: authLoading } = useAuth();
@@ -98,6 +99,49 @@ export default function OrdersPage() {
     return status !== 'cancelled' && status !== 'delivered' && status !== 'completed';
   };
 
+  // Format status label for display (e.g., "orderReceived" -> "Order Received")
+  const formatStatusLabel = (status: string | undefined): string => {
+    if (!status) return 'Unknown';
+    
+    // Handle common status variations
+    const statusLower = status.toLowerCase();
+    
+    // Map status values to display labels
+    const statusLabels: Record<string, string> = {
+      'new': 'New',
+      'cancelled': 'Cancelled',
+      'delivered': 'Delivered',
+      'delivery': 'Delivery',
+      'orderreceived': 'Order Received',
+      'order received': 'Order Received',
+      'order-received': 'Order Received',
+      'order_received': 'Order Received',
+      'return': 'Return',
+      'completed': 'Completed',
+      'fulfilled': 'Fulfilled',
+      'pending': 'Pending',
+      'processing': 'Processing',
+      'shipped': 'Shipped',
+    };
+    
+    // Check if we have a specific label for this status
+    if (statusLabels[statusLower]) {
+      return statusLabels[statusLower];
+    }
+    
+    // Fallback: Capitalize first letter of each word
+    return status
+      .split(/[\s_-]+/)
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ');
+  };
+
+  // Get status badge classes
+  const getStatusBadgeClass = (status: string | undefined): string => {
+    if (!status) return getDefaultBadgeClasses();
+    return getStatusBadgeClasses(status);
+  };
+
   if (authLoading || loading) {
     return (
       <ProtectedRoute>
@@ -145,14 +189,8 @@ export default function OrdersPage() {
                       </div>
                       <div className="text-right">
                         <p className="text-lg font-bold">{formatPrice(order.total_price)}</p>
-                        <span className={`inline-block mt-2 px-3 py-1 rounded-full text-xs font-medium ${
-                          order.status === 'new' || order.order_status === 'new'
-                            ? 'bg-blue-100 text-blue-800'
-                            : order.status === 'cancelled' || order.order_status === 'cancelled'
-                            ? 'bg-red-100 text-red-800'
-                            : 'bg-green-100 text-green-800'
-                        }`}>
-                          {order.order_status || order.status || 'Unknown'}
+                        <span className={`inline-block mt-2 px-3 py-1 rounded-full text-xs font-medium ${getStatusBadgeClass(order.order_status || order.status)}`}>
+                          {formatStatusLabel(order.order_status || order.status)}
                         </span>
                       </div>
                     </div>

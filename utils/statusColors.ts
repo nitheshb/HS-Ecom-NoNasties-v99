@@ -88,28 +88,43 @@ export const getStatusColors = (status: string): ColorScheme => {
   const statusLower = status.toLowerCase();
   
   
-  // Specific status color mappings - updated to ensure blue for Order Received
+  // Specific status color mappings - matching admin panel
   const specificStatusColors: Record<string, number> = {
     'cancelled': 8,        // Red (index 8)
     'order received': 1,   // Blue (index 1) - FORCED BLUE
+    'orderreceived': 1,    // Blue (index 1) - FORCED BLUE
     'delivery': 2,         // Purple (index 2)
+    'delivered': 2,        // Purple (index 2)
     'return': 4,           // Pink (index 4)
+    'new': 1,              // Blue (index 1) - same as order received
+    'completed': 0,        // Green (index 0)
+    'fulfilled': 0,        // Green (index 0)
+    'pending': 6,          // Yellow (index 6)
+    'processing': 3,       // Orange (index 3)
+    'shipped': 5,          // Indigo (index 5)
   };
   
-  // Also handle common variations
+  // Also handle common variations - normalize to standard form
   const statusVariations: Record<string, string> = {
     'order received': 'order received',
     'orderreceived': 'order received',
     'order-received': 'order received',
-    'order_received': 'order received'
+    'order_received': 'order received',
+    'orderReceived': 'order received',
   };
   
   // Check for variations first
   const normalizedStatus = statusVariations[statusLower] || statusLower;
   
-  // Check if it's a specific status first
+  // Check if it's a specific status first (check both normalized and original)
   if (specificStatusColors.hasOwnProperty(normalizedStatus)) {
     const colorIndex = specificStatusColors[normalizedStatus];
+    return COLOR_SCHEMES[colorIndex];
+  }
+  
+  // Also check original status (in case it's already in the mapping)
+  if (specificStatusColors.hasOwnProperty(statusLower)) {
+    const colorIndex = specificStatusColors[statusLower];
     return COLOR_SCHEMES[colorIndex];
   }
   

@@ -11,6 +11,7 @@
 import { collection, doc, getDoc, getDocs, query, where, onSnapshot, orderBy } from 'firebase/firestore';
 import { db } from '../../app/db';
 import { OrderId, OrderItemId } from '../../types/order';
+import { getUserData } from './user';
 
 // ============================================
 // CONSTANTS
@@ -103,21 +104,65 @@ type OrderDoc = {
 // ============================================
 
 /**
- * Get all orders
+ * Get all orders with customer names fetched from users collection
  */
 export const getAllOrders = async () => {
   const ordersCol = collection(db, ORDERS_COLLECTION);
   const snapshot = await getDocs(ordersCol);
   const orders: Order[] = [];
+  
+  // First, collect all orders and extract unique user IDs
+  const userIds = new Set<string>();
   snapshot.forEach(docSnap => {
     const data = docSnap.data();
-    orders.push({ ...data, id: docSnap.id } as Order);
+    const order = { ...data, id: docSnap.id } as Order;
+    orders.push(order);
+    
+    // Extract user ID from order.user.id
+    const user = order.user as Record<string, unknown> | undefined;
+    if (user && typeof user.id === 'string') {
+      userIds.add(user.id);
+    }
   });
-  return orders;
+  
+  // Fetch customer names for all unique user IDs
+  const userNamesMap = new Map<string, string>();
+  await Promise.all(
+    Array.from(userIds).map(async (userId) => {
+      try {
+        const userData = await getUserData(userId);
+        if (userData?.name) {
+          userNamesMap.set(userId, userData.name);
+        }
+      } catch (error) {
+        console.error(`Error fetching user data for ${userId}:`, error);
+      }
+    })
+  );
+  
+  // Attach customer names to orders
+  const ordersWithCustomerNames = orders.map(order => {
+    const user = order.user as Record<string, unknown> | undefined;
+    if (user && typeof user.id === 'string') {
+      const customerName = userNamesMap.get(user.id);
+      if (customerName) {
+        return {
+          ...order,
+          user: {
+            ...user,
+            name: customerName,
+          },
+        };
+      }
+    }
+    return order;
+  });
+  
+  return ordersWithCustomerNames;
 };
 
 /**
- * Get order by ID, optionally with order items
+ * Get order by ID, optionally with order items and customer name
  */
 export const getOrderById = async (orderId: string, includeItems: boolean = false) => {
   const orderRef = doc(db, ORDERS_COLLECTION, orderId);
@@ -126,6 +171,22 @@ export const getOrderById = async (orderId: string, includeItems: boolean = fals
     return null;
   }
   const order = { ...orderSnap.data(), id: orderSnap.id } as Order;
+
+  // Fetch customer name from users collection
+  const user = order.user as Record<string, unknown> | undefined;
+  if (user && typeof user.id === 'string') {
+    try {
+      const userData = await getUserData(user.id);
+      if (userData?.name) {
+        order.user = {
+          ...user,
+          name: userData.name,
+        };
+      }
+    } catch (error) {
+      console.error(`Error fetching user data for order ${orderId}:`, error);
+    }
+  }
 
   if (includeItems) {
     const itemsQuery = query(

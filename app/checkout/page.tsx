@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { createOrder } from '@/services/create/order';
 import { getOrderDependencies } from '@/lib/order-helpers';
 import { auth } from '@/app/db';
+import { getUserData } from '@/services/read/user';
 
 export default function CheckoutPage() {
   const { items, getTotal, clearCart } = useCart();
@@ -41,6 +42,19 @@ export default function CheckoutPage() {
 
       const user = auth.currentUser;
       
+      // Fetch user's name from Firestore
+      let userName = '';
+      if (user) {
+        try {
+          const userData = await getUserData(user.uid);
+          if (userData?.name) {
+            userName = userData.name;
+          }
+        } catch (error) {
+          console.error('Error fetching user name:', error);
+        }
+      }
+      
       const orderPayload = {
         products,
         total_price: total,
@@ -49,7 +63,8 @@ export default function CheckoutPage() {
         order_status: 'new',
         user: user ? {
           id: user.uid,
-          email: user.email,
+          email: user.email || '',
+          name: userName,
         } : {},
         address: {},
         currency: { code: 'INR', symbol: '₹' },
