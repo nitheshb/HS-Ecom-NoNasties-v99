@@ -106,7 +106,6 @@ export const createCategoriesDb = async (orgId: string, payload: { params: Recor
     await setDoc(doc(db, `p_category`, did), categoryData);
     return {
       success: true,
-      id: did,
       ...categoryData,
       _timestamp: new Date().getTime()
     };

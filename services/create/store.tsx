@@ -44,7 +44,7 @@ export const createStore = async (params: Omit<StoreDetails, 'id' | 'created_at'
   };
   try {
     await setDoc(doc(db, 'p_store', id), store);
-    return { success: true, id, ...store };
+    return { success: true, ...store };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : String(error) };
   }

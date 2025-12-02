@@ -40,9 +40,11 @@ export const createBanner = async (
     const existingImages = bannerData.images.filter(img => typeof img === 'string') as string[];
     
     let uploadedImageUrls: string[] = [];
-    if (imageFiles.length > 0 && dependencies?.uploadToS3) {
+    const uploadToS3 = dependencies?.uploadToS3;
+
+    if (imageFiles.length > 0 && uploadToS3) {
       uploadedImageUrls = await Promise.all(
-        imageFiles.map(file => dependencies.uploadToS3(file, 'banners'))
+        imageFiles.map(file => uploadToS3(file, 'banners'))
       );
     }
     

@@ -53,13 +53,13 @@ export const addUserAddress = async (uid: string, address: Omit<Address, 'id'>):
     const existingAddresses = (userSnap.data()?.addresses || []) as Address[];
     
     // If this is set as default, unset all other defaults
-    const updatedAddresses = existingAddresses.map((addr) => ({
+    const updatedAddresses: Address[] = existingAddresses.map((addr) => ({
       ...addr,
       isDefault: newAddress.isDefault ? false : addr.isDefault,
     }));
     
     // Add the new address
-    updatedAddresses.push(newAddress);
+    updatedAddresses.push(newAddress as Address);
     
     await updateDoc(userRef, {
       addresses: updatedAddresses,

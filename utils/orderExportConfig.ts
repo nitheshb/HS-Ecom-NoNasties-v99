@@ -1,5 +1,33 @@
-import { ExportColumn } from '@/services/exportService';
-import { Order } from '@/pages/orders/AllOrders';
+// Lightweight types redefined here to avoid importing unused or non-existent modules.
+export interface ExportColumn {
+  key: string;
+  label: string;
+  width?: number;
+  align?: 'left' | 'right' | 'center';
+}
+
+// Minimal Order shape needed for export; matches runtime usage without tight coupling.
+export interface Order {
+  id: string;
+  address?: unknown;
+  user?: {
+    firstname?: string;
+    name?: string;
+    email?: string;
+  };
+  delivery_dates?: Array<{
+    delivery_date?: string | number | Date;
+    delivery_time_start?: string;
+    delivery_time?: string;
+  }>;
+  delivery_date?: string | number | Date;
+  total_price?: number;
+  order_status?: string;
+  status?: string;
+  order_details_count?: number;
+  order_items_status_count?: number;
+  created_at?: string | number | Date;
+}
 
 export const getOrderExportColumns = (): ExportColumn[] => [
   {
@@ -80,9 +108,10 @@ export const transformOrdersForExport = (orders: Order[]): any[] => {
     let deliveryDateString = 'N/A';
     if (order.delivery_dates && Array.isArray(order.delivery_dates) && order.delivery_dates.length > 0) {
       const deliveryDates = order.delivery_dates
-        .filter(entry => entry.delivery_date)
+        .filter(entry => entry.delivery_date !== undefined && entry.delivery_date !== null)
         .map(entry => {
-          const date = new Date(entry.delivery_date);
+          const rawDate = entry.delivery_date as string | number | Date;
+          const date = new Date(rawDate);
           // Use delivery_time_start if available, fallback to delivery_time for backward compatibility
           const timeStr = entry.delivery_time_start || entry.delivery_time;
           const time = timeStr ? 

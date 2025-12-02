@@ -110,7 +110,6 @@ export const createSubCategoriesDb = async (orgId: string, payload: { params: Re
     await setDoc(doc(db, `p_subcategory`, did), subCategoryData);
     return {
       success: true,
-      id: did,
       ...subCategoryData,
       _timestamp: new Date().getTime()
     };

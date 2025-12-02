@@ -379,8 +379,13 @@ export const getFacebookCatalogProductCount = async (
     let nextUrl: string | null = `https://graph.facebook.com/v24.0/${catalogId}/products?access_token=${accessToken}&limit=100`;
 
     while (nextUrl) {
-      const response = await fetch(nextUrl);
-      const data = await response.json();
+      const response: Response = await fetch(nextUrl);
+      const data: {
+        error?: { message?: string };
+        data?: unknown[];
+        paging?: { next?: string };
+        [key: string]: unknown;
+      } = await response.json();
 
       if (data.error) {
         throw new Error(data.error.message || 'Failed to fetch products from Facebook');

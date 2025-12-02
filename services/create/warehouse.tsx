@@ -46,7 +46,7 @@ export const createWarehouse = async (orgId: string, params: Omit<Warehouse, 'id
   };
   try {
     await setDoc(doc(db, 'p_warehouse', id), warehouse);
-    return { success: true, id, ...warehouse };
+    return { success: true, ...warehouse };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : String(error) };
   }

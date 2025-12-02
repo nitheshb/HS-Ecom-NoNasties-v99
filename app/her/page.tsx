@@ -2,7 +2,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import Image from 'next/image';
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useCart } from '@/lib/cart-context';
 import { 
@@ -14,6 +14,9 @@ import {
 } from '@/lib/products';
 import { getFilteredProducts } from '@/lib/product-filters';
 import { Filter, LayoutGrid, Grid3X3 } from 'lucide-react';
+
+// Force dynamic rendering to avoid static prerender issues with useSearchParams
+export const dynamic = 'force-dynamic';
 
 const HER_HERO_TITLES = ['ForHerHero-img1', 'ForHerHero-img2', 'ForHerHero-img3', 'ForHerHero-img4'] as const;
 const HERO_TITLE_SET = new Set(HER_HERO_TITLES.map((title) => title.toLowerCase()));
@@ -72,7 +75,7 @@ const extractSubHeroNumber = (title: string): number => {
   return match ? parseInt(match[0], 10) : 0;
 };
 
-export default function HerPage() {
+function HerPageContent() {
   const searchParams = useSearchParams();
   const filterValue = searchParams.get('filter') || 'all';
   
@@ -410,6 +413,14 @@ export default function HerPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function HerPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen pb-12" />}>
+      <HerPageContent />
+    </Suspense>
   );
 }
 

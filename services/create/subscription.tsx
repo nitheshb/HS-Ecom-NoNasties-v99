@@ -90,17 +90,26 @@ export async function activateSubscription(input: Omit<SubscriptionRecord,
   'subscription_days' | 'is_paused' | 'status'> & { start_date: string; next_delivery_date?: string; }) {
   const start = new Date(input.start_date);
   const next = input.next_delivery_date ? parseTimestamp(input.next_delivery_date) : start;
-  const record: Record<string, unknown> = {
+  const record: SubscriptionRecord = {
     ...input,
     next_delivery_date: next.getTime().toString(),
     // Map from input's delivery_time_start/delivery_time_end to subscription's delivery_start_time/delivery_end_time
-    delivery_start_time: (input as Record<string, unknown>).delivery_start_time || (input as Record<string, unknown>).delivery_time_start,
-    delivery_end_time: (input as Record<string, unknown>).delivery_end_time || (input as Record<string, unknown>).delivery_time_end,
+    delivery_start_time: String(
+      (input as Record<string, unknown>).delivery_start_time ??
+      (input as Record<string, unknown>).delivery_time_start ??
+      ''
+    ),
+    delivery_end_time: (() => {
+      const end =
+        (input as Record<string, unknown>).delivery_end_time ??
+        (input as Record<string, unknown>).delivery_time_end;
+      return end !== undefined && end !== null ? String(end) : undefined;
+    })(),
     start_date: start.toISOString(),
     status: 'active',
     is_paused: false,
     subscription_days: getSubscriptionDays(input.type),
-  } as SubscriptionRecord;
+  };
 
   await setDoc(doc(collection(db, SUBSCRIPTIONS_COLLECTION), input.subscription_id), record);
   return { success: true, data: record };

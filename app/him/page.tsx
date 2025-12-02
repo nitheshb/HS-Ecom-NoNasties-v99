@@ -1,7 +1,7 @@
 'use client';
 
 import { useCart } from '@/lib/cart-context';
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { 
   getHimProducts, 
@@ -12,7 +12,10 @@ import {
 } from '@/lib/products';
 import { getFilteredProducts } from '@/lib/product-filters';
 
-export default function HimPage() {
+// Force dynamic rendering to avoid static prerender issues with useSearchParams
+export const dynamic = 'force-dynamic';
+
+function HimPageContent() {
   const searchParams = useSearchParams();
   const filterValue = searchParams.get('filter') || 'all';
   
@@ -214,6 +217,14 @@ export default function HimPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function HimPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen pb-12 pt-24" />}>
+      <HimPageContent />
+    </Suspense>
   );
 }
 

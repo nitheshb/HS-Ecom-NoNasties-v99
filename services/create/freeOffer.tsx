@@ -20,16 +20,16 @@ export interface FreeOffer {
   target_type: TargetType;
   target_product_id?: string;
   target_product_ids?: string[];
-  target_quantity?: number;
-  target_variant_id?: string;
+  target_quantity?: number | null;
+  target_variant_id?: string | null;
   free_product_id: string;
-  free_variant_id?: string;
+  free_variant_id?: string | null;
   free_quantity: number;
   max_orders: number;
   active: boolean;
   used_orders: string[];
-  start_date?: number;
-  end_date?: number;
+  start_date?: number | null;
+  end_date?: number | null;
   created_at: number;
   updated_at: number;
 }

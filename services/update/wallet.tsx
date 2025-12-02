@@ -54,7 +54,7 @@ async function getOrCreateWallet(userId: string): Promise<WalletRecord> {
     await setDoc(ref, initial);
     return initial;
   }
-  return { user_id: userId, ...(snap.data() as WalletRecord) } as WalletRecord;
+  return { ...(snap.data() as WalletRecord), user_id: userId } as WalletRecord;
 }
 
 // ============================================

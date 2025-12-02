@@ -41,12 +41,19 @@ export const createUnitsDb = async (orgId: string, payload: { params: Record<str
   
   Object.keys(params).forEach(key => {
     const match = key.match(/^title\[(.*)\]$/);
-    if (match && match[1] && params[key] !== undefined && params[key].toString().trim() !== '') {
+    const value = params[key];
+    if (
+      match &&
+      match[1] &&
+      value !== undefined &&
+      value !== null &&
+      value.toString().trim() !== ''
+    ) {
       const locale = match[1];
-      titleData[locale] = params[key] as string;
+      titleData[locale] = value as string;
       translations.push({
         locale: locale,
-        title: params[key] as string
+        title: value as string
       });
       if (!locales.includes(locale)) {
         locales.push(locale);

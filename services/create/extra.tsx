@@ -117,7 +117,6 @@ export const createExtraGroupsDb = async (orgId: string, payload: { params: Reco
     await setDoc(doc(db, 'T_extra_groups', did), groupData);
     return {
       success: true,
-      id: did,
       ...groupData,
       _timestamp: new Date().getTime()
     };
@@ -156,7 +155,6 @@ export const createExtraValuesDb = async (orgId: string, payload: { params: Reco
     await setDoc(doc(db, 'T_extra_values', did), extraValueData);
     return {
       success: true,
-      id: did,
       ...extraValueData,
       _timestamp: new Date().getTime()
     };

@@ -243,9 +243,10 @@ export const getAllProducts = async (orgId: string, params: { params?: Record<st
         trans.title?.toLowerCase().includes(searchTerm) ||
         trans.description?.toLowerCase().includes(searchTerm)
       );
-      const titleMatch = Object.values(product.title || {}).some((title: string) =>
-        title.toLowerCase().includes(searchTerm)
-      );
+      const titleMatch = Object.values(product.title || {}).some((title) => {
+        if (typeof title !== 'string') return false;
+        return title.toLowerCase().includes(searchTerm);
+      });
       const otherFieldsMatch =
         (product.sku as string)?.toLowerCase().includes(searchTerm);
       return translationMatch || titleMatch || otherFieldsMatch;

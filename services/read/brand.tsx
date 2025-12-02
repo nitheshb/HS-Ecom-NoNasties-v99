@@ -68,7 +68,11 @@ export const getAllBrandsById = async (orgId: string, uid: string, payload?: unk
     const x = docSnap.data() as Brand;
     x.id = docSnap.id;
     x.uuid = docSnap.id;
-    x.img = (x as unknown)['images[0]'] || x.img;
+    const anyX = x as Record<string, unknown>;
+    const firstImage = anyX['images[0]'];
+    if (typeof firstImage === 'string' && firstImage) {
+      x.img = firstImage;
+    }
     return { data: x };
   } else {
     return { data: null };

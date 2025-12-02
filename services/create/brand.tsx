@@ -47,7 +47,6 @@ export const createBrandDb = async (orgId: string, payload: { params: Record<str
     await addDoc(collection(db, `P_brands`), brandData);
     return {
       success: true,
-      id: did,
       ...brandData,
       _timestamp: new Date().getTime()
     };

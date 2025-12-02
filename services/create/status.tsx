@@ -88,7 +88,7 @@ export const createStatus = async (params: Omit<Status, 'id' | 'created_at' | 'u
   
   try {
     await setDoc(doc(db, 'T_Status', id), status);
-    return { success: true, id, ...status };
+    return { success: true, ...status };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : String(error) };
   }
